@@ -1,0 +1,12 @@
+pandas
+tqdm
+scipy
+soundfile
+
+torch
+torchvision
+torchaudio
+
+transformers
+
+textblob
