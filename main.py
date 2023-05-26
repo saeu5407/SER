@@ -1,77 +1,53 @@
 import os
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from transformers import AutoConfig, Wav2Vec2Processor
-from datasets import load_dataset, load_metric
 import torch
-import torchaudio
+from torch.utils.data import DataLoader
+from transformers import AutoConfig
 
-import numpy as np
+from src.dataset import SERDataset, collate_fn
+from src.utils import make_trainset_n_split
+from src.modeling import Wav2Vec2ForSpeechClassification
+from src.train import train
 
-from tqdm.auto import tqdm
-from scipy.spatial import distance
-from textblob import TextBlob
-from transformers import AutoProcessor, Wav2Vec2ForCTC
+if __name__ == '__main__':
 
-from src.preproc import apply_wav2vec
+    default_path = os.getcwd().split(os.path.sep + 'src')[0]
+    dataset_path = os.path.join(default_path, 'datasets')
 
+    # split datasets
+    make_trainset_n_split(dataset_path)
 
-# model setting
-model_name_or_path = "facebook/wav2vec2-base-960h" # jonatasgrosman/wav2vec2-large-xlsr-53-english 컴퓨터 성능좋으면 이거하자
-pooling_mode = "mean"
+    # load datasets & dataloader
+    train_datasets = SERDataset(data_path=f"{dataset_path}/train_split.csv")
+    valid_datasets = SERDataset(data_path=f"{dataset_path}/valid_split.csv")
 
-# config
-config = AutoConfig.from_pretrained(
-    model_name_or_path,
-    num_labels=len(train.label.unique()),
-    finetuning_task="wav2vec2_clf",
-)
-setattr(config, 'pooling_mode', pooling_mode) # 객체 내부의 속성을 변경해주는 파이썬 내장 함수로 config 파일에 pooling_mode를 추가한 것
+    train_dataloader = DataLoader(train_datasets, batch_size=4, shuffle=True,
+                                  collate_fn=collate_fn, num_workers=1)
+    valid_dataloader = DataLoader(valid_datasets, batch_size=4, shuffle=True,
+                                  collate_fn=collate_fn, num_workers=1)
 
-processor = Wav2Vec2Processor.from_pretrained(model_name_or_path,)
-target_sampling_rate = processor.feature_extractor.sampling_rate
+    # config
+    model_name_or_path = "facebook/wav2vec2-base-960h"  # jonatasgrosman/wav2vec2-large-xlsr-53-english 컴퓨터 성능좋으면 이거하자
+    config = AutoConfig.from_pretrained(
+        model_name_or_path,
+        num_labels=len(train_datasets.data.label.unique()),
+        finetuning_task="wav2vec2_clf",
+    )
+    setattr(config, 'pooling_mode', "mean")  # 객체 내부의 속성을 변경해주는 파이썬 내장 함수로 config 파일에 pooling_mode를 추가한 것
 
-# Loading the created dataset using datasets
+    # load model & freeze feature extractor
+    model = Wav2Vec2ForSpeechClassification.from_pretrained(
+        model_name_or_path,
+        config=config,
+    )
+    model.freeze_feature_extractor()
 
-data_files = {
-    "train": f"{dataset_path}/train_split.csv",
-    "valid": f"{dataset_path}/valid_split.csv",
-}
-dataset = load_dataset("csv", data_files=data_files,)
-train_dataset = dataset["train"]
-eval_dataset = dataset["valid"]
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3, verbose=True)
 
-print(train_dataset)
-print(eval_dataset)
+    best_model = train(model=model, device=device,
+                       train_loader=train_dataloader, valid_loader=valid_dataloader,
+                       optimizer=optimizer, scheduler=scheduler, epochs=1,
+                       default_path=default_path)
 
-input_column = "path"
-output_column = "label"
-
-# 기존 오디오를 불러온 후, 모델의 sampling rate에 맞추어 리샘플링 하는 함수
-def speech_file_to_array_fn(path):
-    speech_array, sampling_rate = torchaudio.load(path)
-    resampler = torchaudio.transforms.Resample(sampling_rate, target_sampling_rate)
-    speech = resampler(speech_array).squeeze().numpy()
-    return speech
-
-# Process 사이클을 돌리는 함수
-def preprocess_function(examples):
-    speech_list = [speech_file_to_array_fn(path) for path in examples[input_column]]
-    result = processor(speech_list, sampling_rate=target_sampling_rate)
-    result['label'] = list(examples[output_column])
-
-    return result
-
-# 데이터셋에 대해 Process 사이클을 돌려서 전처리
-train_dataset = train_dataset.map(
-    preprocess_function,
-    batch_size=100,
-    batched=True,
-    num_proc=4
-)
-eval_dataset = eval_dataset.map(
-    preprocess_function,
-    batch_size=100,
-    batched=True,
-    num_proc=4
-)
+    # predict test data
