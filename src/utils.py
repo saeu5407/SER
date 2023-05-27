@@ -7,6 +7,8 @@ def make_trainset_n_split(dataset_path):
     train_df = pd.read_csv(os.path.join(dataset_path, 'train.csv'))
     train_df.path = train_df.path.map(lambda x: os.path.join(dataset_path, 'train', x.split('/')[-1]))
 
+    train_df = train_df.loc[train_df.id != 'TRAIN_2143', :]
+
     test_df = pd.read_csv(os.path.join(dataset_path, 'test.csv'))
     test_df.path = train_df.path.map(lambda x: os.path.join(dataset_path, 'test', x.split('/')[-1]))
 

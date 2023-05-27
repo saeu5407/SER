@@ -64,7 +64,7 @@ def train(model, device, train_loader, valid_loader, optimizer, scheduler=None, 
         valid_loss, valid_acc = validation(model=model, device=device, valid_loader=valid_loader, criterion=criterion)
         loss_for_save.append([epoch, avg_loss, valid_loss, valid_acc])
 
-        logger.info(f"Epoch : {epoch}, Loss : {avg_loss:.4f}, Valid Loss : {valid_loss:.4f}")
+        logger.info(f"Epoch : {epoch}, Loss : {avg_loss:.4f}, Valid Loss : {valid_loss:.4f}, Valid Acc : {valid_acc:.2f}")
 
         if scheduler is not None:
             scheduler.step(valid_acc)
@@ -76,7 +76,7 @@ def train(model, device, train_loader, valid_loader, optimizer, scheduler=None, 
             best_valid_loss = valid_loss
             best_model = copy.deepcopy(model.state_dict())
 
-        if (epoch % 100 == 0) or (epoch == epochs):
+        if (epoch % 20 == 0) or (epoch == epochs):
             checkpoint = {
                 'model_state_dict': best_model,
                 'criterion_state_dict': criterion.state_dict(),
@@ -87,6 +87,7 @@ def train(model, device, train_loader, valid_loader, optimizer, scheduler=None, 
             }
             torch.save(checkpoint, os.path.join(default_path, 'models', f'test_model_{epoch}' + '.pth'))
 
+    print(f">>> [BEST MODEL] Epoch : {best_epoch}, Loss : {best_train_loss:.4f}, Valid Loss : {best_valid_loss:.4f}")
     pd.DataFrame(loss_for_save, columns = ['epoch', 'train_loss', 'valid_loss', 'valid_acc'])\
         .to_csv(os.path.join(default_path, 'models', 'history.csv'), index=False)
 
@@ -100,7 +101,7 @@ def validation(model, device, valid_loader, criterion):
     test_loss = 0
 
     with torch.no_grad():
-        for x1, y, x2, x3 in tqdm(iter(valid_loader)):
+        for x1, y, x2, x3 in iter(valid_loader):
             x = x1.to(device)
             y = y.flatten().to(device)
 

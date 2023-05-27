@@ -3,10 +3,11 @@ import torch
 from torch.utils.data import DataLoader
 from transformers import AutoConfig
 
-from src.dataset import SERDataset, collate_fn
+from src.dataset import SERDataset, collate_fn, collate_fn_test
 from src.utils import make_trainset_n_split
 from src.modeling import Wav2Vec2ForSpeechClassification
 from src.train import train
+from src.models import BaseModel
 
 if __name__ == '__main__':
 
@@ -41,13 +42,16 @@ if __name__ == '__main__':
     )
     model.freeze_feature_extractor()
 
+    # model = BaseModel()
+
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print(f">>> Use {device}")
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3, verbose=True)
 
     best_model = train(model=model, device=device,
                        train_loader=train_dataloader, valid_loader=valid_dataloader,
-                       optimizer=optimizer, scheduler=scheduler, epochs=1,
+                       optimizer=optimizer, scheduler=scheduler, epochs=100,
                        default_path=default_path)
 
     # predict test data
