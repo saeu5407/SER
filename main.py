@@ -21,12 +21,12 @@ if __name__ == '__main__':
     train_datasets = SERDataset(data_path=f"{dataset_path}/train_split.csv")
     valid_datasets = SERDataset(data_path=f"{dataset_path}/valid_split.csv")
 
-    train_dataloader = DataLoader(train_datasets, batch_size=4, shuffle=True,
-                                  collate_fn=collate_fn, num_workers=1)
-    valid_dataloader = DataLoader(valid_datasets, batch_size=4, shuffle=True,
-                                  collate_fn=collate_fn, num_workers=1)
-
+    train_dataloader = DataLoader(train_datasets, batch_size=8, shuffle=True,
+                                  collate_fn=collate_fn, num_workers=2)
+    valid_dataloader = DataLoader(valid_datasets, batch_size=8, shuffle=True,
+                                  collate_fn=collate_fn, num_workers=2)
     # config
+    """
     model_name_or_path = "facebook/wav2vec2-base-960h"  # jonatasgrosman/wav2vec2-large-xlsr-53-english 컴퓨터 성능좋으면 이거하자
     config = AutoConfig.from_pretrained(
         model_name_or_path,
@@ -41,12 +41,12 @@ if __name__ == '__main__':
         config=config,
     )
     model.freeze_feature_extractor()
-
-    # model = BaseModel()
+    """
+    model = BaseModel()
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print(f">>> Use {device}")
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3, verbose=True)
 
     best_model = train(model=model, device=device,
